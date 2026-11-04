@@ -1,0 +1,60 @@
+{
+    "name": "sitecommand/laravel",
+    "description": "Connect a Laravel app to Sitecommand: signed, read-only health, errors, dependencies and developer-registered actions.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sitecommand",
+        "laravel",
+        "monitoring",
+        "health",
+        "mcp"
+    ],
+    "homepage": "https://github.com/nomanjawad/sitecommand-laravel",
+    "authors": [
+        {
+            "name": "Noman E Jawad",
+            "homepage": "https://nomanjawad.vercel.app"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "guzzlehttp/guzzle": "^7.5",
+        "illuminate/console": "^11.0|^12.0|^13.0",
+        "illuminate/http": "^11.0|^12.0|^13.0",
+        "illuminate/routing": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "phpunit/phpunit": "^11.0|^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sitecommand\\Laravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Sitecommand\\Laravel\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Sitecommand\\Laravel\\SitecommandServiceProvider"
+            ],
+            "aliases": {
+                "Sitecommand": "Sitecommand\\Laravel\\Facades\\Sitecommand"
+            }
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
