@@ -5,7 +5,7 @@ Connect a Laravel app to [Sitecommand](https://siteconnector.vercel.app): health
 - **Read-only by design.** It never runs arbitrary code, writes files, runs shell commands or reads your `.env`. The only things that can run are the actions you register.
 - **Signed requests only.** Every request is signed with your site secret (HMAC-SHA256, ±5 minutes, single-use nonce). Anything else gets a plain `404`, so the route does not even reveal it exists. Every answer is signed back, so nothing in between can fake it.
 - **No middleware.** The route skips the `web` group: no sessions, CSRF, page caches or HTML error pages touch it.
-- Laravel 11, 12 and 13 · PHP 8.2+.
+- Laravel 12 and 13 · PHP 8.2+ (Laravel 11 is out of security support; Composer refuses its releases).
 
 ## Install
 
