@@ -95,9 +95,10 @@ final class Errors
             $name = 'Error';
             $where = '';
             $context = $cut === false ? '' : substr($first, $cut);
-            if (preg_match('/\(([A-Za-z_\\\\][\w\\\\]*)\(code: [^)]*\): .*? at (\S+?):(\d+)\)/s', $context, $x)) {
-                $name = $x[1];
-                $where = self::strip($x[2], $basePath).':'.$x[3];
+            // Laravel writes the context as JSON: class names arrive as Foo\\\\Bar, paths may hold spaces.
+            if (preg_match('/\[object\] \(([A-Za-z_\\\\][\w\\\\]*)\(code: [^)]*\): .*? at (\/[^"]+?|[A-Za-z]:[^"]+?):(\d+)\)/s', $context, $x)) {
+                $name = str_replace('\\\\', '\\', $x[1]);
+                $where = self::strip(str_replace('\\\\', '\\', $x[2]), $basePath).':'.$x[3];
             }
             $stack = [];
             foreach ($e['rest'] as $l) {

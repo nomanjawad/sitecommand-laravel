@@ -36,6 +36,15 @@ class PartsTest extends TestCase
         $this->assertStringContainsString('#0 vendor/laravel', $errors[1]['stack']);
     }
 
+    public function test_error_class_and_path_with_spaces_from_json_context(): void
+    {
+        $log = '[2026-11-04 07:05:28] local.ERROR: SQLSTATE[HY000] [2002] Connection refused (Connection: mysql, SQL: select 1) {"exception":"[object] (Illuminate\\\\Database\\\\QueryException(code: 2002): SQLSTATE[HY000] [2002] Connection refused (Connection: mysql, SQL: select 1) at /Users/me/Working Files/app/vendor/laravel/framework/src/Illuminate/Database/Connection.php:838)';
+        $e = Errors::parse($log, '/Users/me/Working Files/app/')[0];
+        $this->assertSame('Illuminate\\Database\\QueryException', $e['name']);
+        $this->assertSame('vendor/laravel/framework/src/Illuminate/Database/Connection.php:838', $e['where']);
+        $this->assertSame('SQLSTATE[HY000] [2002] Connection refused (Connection: mysql, SQL: select 1)', $e['message']);
+    }
+
     public function test_composer_packages(): void
     {
         $deps = Dependencies::fromComposerPackages([
