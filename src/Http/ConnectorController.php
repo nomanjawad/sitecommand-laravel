@@ -9,6 +9,7 @@ use Sitecommand\Laravel\Errors;
 use Sitecommand\Laravel\Health;
 use Sitecommand\Laravel\Info;
 use Sitecommand\Laravel\Mask;
+use Sitecommand\Laravel\Settings;
 use Sitecommand\Laravel\Signature;
 use Sitecommand\Laravel\Sitecommand;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,8 +28,7 @@ class ConnectorController
     {
         $method = strtoupper($request->getMethod());
         $raw = in_array($method, ['GET', 'HEAD'], true) ? '' : (string) $request->getContent();
-        $secret = config('sitecommand.secret');
-        $secret = is_string($secret) ? trim($secret) : null;
+        $secret = Settings::secret();
         $nonce = $request->query(Signature::NONCE_PARAM);
 
         $reason = Signature::verify(

@@ -18,10 +18,10 @@ class CheckCommand extends Command
     public function handle(): int
     {
         $ok = true;
-        $secret = (string) config('sitecommand.secret');
+        $secret = (string) \Sitecommand\Laravel\Settings::secret();
         $base = SitecommandServiceProvider::basePath();
 
-        $ok = $this->report(strlen($secret) >= 32, 'Secret', strlen($secret) >= 32 ? 'SITECOMMAND_SECRET is set.' : 'SITECOMMAND_SECRET is missing or too short.', 'Run php artisan sitecommand:connect (or copy the secret from the dashboard into .env)'.(app()->configurationIsCached() ? ', then php artisan config:cache' : '').'.') && $ok;
+        $ok = $this->report(strlen($secret) >= 32, 'Secret', strlen($secret) >= 32 ? 'SITECOMMAND_SECRET is set.' : 'SITECOMMAND_SECRET is missing or too short.', 'Run php artisan sitecommand:connect, open /'.trim((string) config('sitecommand.setup.path', 'sitecommand'), '/').' in the browser, or copy the secret from the dashboard into .env.') && $ok;
         $registered = Route::has('sitecommand.connector');
         $ok = $this->report($registered, 'Route', $registered ? "Registered at {$base}/…" : 'The connector route is not registered.', app()->routesAreCached() ? 'Routes are cached: run php artisan route:cache again.' : 'Is the package discovered? Run php artisan package:discover.') && $ok;
         $url = ConnectCommand::origin((string) ($this->option('url') ?: config('app.url')));

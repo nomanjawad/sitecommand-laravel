@@ -32,6 +32,22 @@ return [
         'config' => true,
     ],
 
+    /*
+     * The setup page (/sitecommand by default): status, Connect with a code
+     * and Verify from the browser, for hosts without a terminal. Behind the
+     * app's login; who may open it is the `viewSitecommand` gate. By default
+     * that is anyone in local development, else only the emails listed in
+     * SITECOMMAND_ADMINS. Define the gate yourself to change it:
+     *   Gate::define('viewSitecommand', fn ($user) => $user->is_admin);
+     * Everyone else gets a 404.
+     */
+    'setup' => [
+        'enabled' => (bool) env('SITECOMMAND_SETUP', true),
+        'path' => env('SITECOMMAND_SETUP_PATH', 'sitecommand'),
+        'middleware' => ['web', 'auth'],
+        'admins' => array_values(array_filter(array_map('trim', explode(',', (string) env('SITECOMMAND_ADMINS', ''))))),
+    ],
+
     /* Errors are read from the app's own log (storage/logs). How much of its end to read. */
     'errors' => [
         'max_bytes' => 512 * 1024,

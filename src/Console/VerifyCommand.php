@@ -13,8 +13,8 @@ class VerifyCommand extends Command
 
     public function handle(): int
     {
-        $secret = (string) config('sitecommand.secret');
-        $siteId = (string) config('sitecommand.site_id');
+        $secret = (string) \Sitecommand\Laravel\Settings::secret();
+        $siteId = (string) \Sitecommand\Laravel\Settings::siteId();
         if (strlen($secret) < 32 || ! preg_match('/^[0-9a-f-]{36}$/i', $siteId)) {
             $this->error('SITECOMMAND_SECRET and SITECOMMAND_SITE_ID are not set. Run php artisan sitecommand:connect first (or press Verify in the dashboard).');
 

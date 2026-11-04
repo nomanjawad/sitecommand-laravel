@@ -9,7 +9,7 @@ final class Hub
 {
     public static function url(?string $override = null): string
     {
-        return rtrim($override ?: (string) config('sitecommand.hub', 'https://siteconnector.vercel.app'), '/');
+        return $override ? rtrim($override, '/') : \Sitecommand\Laravel\Settings::hub();
     }
 
     /** @return array{0: int, 1: array<string, mixed>|null} */
@@ -50,6 +50,32 @@ final class Hub
         }
 
         return (bool) ($report['ok'] ?? false);
+    }
+
+    /**
+     * Write the keys into the app's .env (keeping everything else) and make
+     * them live: runtime config now, and the config cache rebuilt if there is one.
+     */
+    public static function writeEnv(array $values): bool
+    {
+        $path = app()->environmentFilePath();
+        $before = is_readable($path) ? (string) file_get_contents($path) : '';
+        if (@file_put_contents($path, self::upsertEnv($before, $values)) === false) {
+            return false;
+        }
+        foreach ($values as $k => $v) {
+            config(['sitecommand.'.strtolower(substr($k, strlen('SITECOMMAND_'))) => $v]);
+        }
+        \Sitecommand\Laravel\Settings::flush();
+        if (app()->configurationIsCached()) {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('config:cache');
+            } catch (\Throwable) {
+                // The connector reads its keys from .env itself while config is cached.
+            }
+        }
+
+        return true;
     }
 
     /** Set keys in a .env file's text, keeping everything else. Pure. */

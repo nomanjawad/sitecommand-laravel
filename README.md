@@ -13,15 +13,23 @@ Connect a Laravel app to [Sitecommand](https://siteconnector.vercel.app): health
 composer require sitecommand/laravel
 ```
 
-Deploy the app as usual, then **on the server** (where the live `.env` is):
+Deploy the app as usual (any way: git, CI, or a zip uploaded through the host's file manager). Then connect it in one of three ways:
 
-```bash
-php artisan sitecommand:connect
+**1. From the browser (no terminal needed).** Sign in to your app and open **`/sitecommand`**. Press **Connect with Sitecommand**, approve the code in the dashboard, and the secret is saved in `.env` for you. Then press **Verify now**: Sitecommand calls the site from the outside and shows the checklist. Come back any time to recheck.
+
+Who may open the page is the `viewSitecommand` gate. By default: anyone signed in during local development, and in production only the emails in `SITECOMMAND_ADMINS` (comma-separated, in `.env`). Usually you define it yourself in `AppServiceProvider::boot()`:
+
+```php
+Gate::define('viewSitecommand', fn ($user) => $user->hasRole('admin'));
 ```
 
-It prints a code, you approve it in the Sitecommand dashboard, and it writes `SITECOMMAND_SECRET`, `SITECOMMAND_SITE_ID` and `SITECOMMAND_HUB` into `.env` (and re-caches the config if it was cached). Then it asks the hub to verify the app.
+Everyone else gets a 404. Turn the page off with `SITECOMMAND_SETUP=false`; move it with `SITECOMMAND_SETUP_PATH`.
 
-No shell on the server? Use **Add app → Laravel** in the dashboard instead: it shows the secret once; put it in the server's `.env` as `SITECOMMAND_SECRET=…`, run `php artisan config:cache` if you cache config, and press **Verify**.
+**2. With the file manager.** Use **Add app → Laravel** in the dashboard: it shows the secret once. Put it in the site's `.env` (`SITECOMMAND_SECRET=…`, and `SITECOMMAND_SITE_ID=…` if you want to Verify from `/sitecommand`), save, and press **Verify** in the dashboard. No `config:cache` needed: while the config is cached, the connector reads its own `SITECOMMAND_` lines straight from `.env`.
+
+**3. With a terminal.** On the server: `php artisan sitecommand:connect`. It prints a code, you approve it, and it writes the keys into `.env`, then asks the hub to verify.
+
+If `.env` is not writable by the web server, the page shows the lines to paste instead.
 
 ## Commands
 

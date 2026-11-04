@@ -76,11 +76,9 @@ class ConnectCommand extends Command
             return self::FAILURE;
         }
 
-        $envPath = app()->environmentFilePath();
-        $before = is_readable($envPath) ? (string) file_get_contents($envPath) : '';
         $values = ['SITECOMMAND_SECRET' => $approved['site_secret'], 'SITECOMMAND_SITE_ID' => $approved['site_id'], 'SITECOMMAND_HUB' => $hub];
-        if (! @file_put_contents($envPath, Hub::upsertEnv($before, $values))) {
-            $this->error("Could not write {$envPath}. Add these lines to the app's .env yourself:");
+        if (! Hub::writeEnv($values)) {
+            $this->error('Could not write '.app()->environmentFilePath().'. Add these lines to the app\'s .env yourself:');
             foreach ($values as $k => $v) {
                 $this->line("  {$k}={$v}");
             }
@@ -88,13 +86,6 @@ class ConnectCommand extends Command
             return self::FAILURE;
         }
         $this->info('✓ Connected. Saved SITECOMMAND_SECRET, SITECOMMAND_SITE_ID and SITECOMMAND_HUB in .env');
-
-        foreach ($values as $k => $v) {
-            config(['sitecommand.'.strtolower(substr($k, strlen('SITECOMMAND_'))) => $v]);
-        }
-        if (app()->configurationIsCached()) {
-            $this->call('config:cache');
-        }
 
         if ($this->option('no-verify')) {
             $this->line('Run <info>php artisan sitecommand:verify</info> once the app is deployed with this package.');
