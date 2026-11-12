@@ -15,7 +15,7 @@ composer require sitecommand/laravel
 
 Deploy the app as usual (any way: git, CI, or a zip uploaded through the host's file manager). Then connect it in one of three ways:
 
-**1. From the browser (no terminal needed).** Sign in to your app and open **`/sitecommand`**. Press **Connect with Sitecommand**, approve the code in the dashboard, and the secret is saved in `.env` for you. Then press **Verify now**: Sitecommand calls the site from the outside and shows the checklist. Come back any time to recheck.
+**1. From the browser (no terminal needed).** Sign in to your app and open **`/sitecommand`**. Press **Connect with Sitecommand**, approve the connection in Sitecommand, and you come back to a Verified site: the secret is saved in `.env` and Sitecommand has already checked the site from the outside. Come back any time to see its status.
 
 Who may open the page is the `viewSitecommand` gate. By default: anyone signed in during local development, and in production only the emails in `SITECOMMAND_ADMINS` (comma-separated, in `.env`). Usually you define it yourself in `AppServiceProvider::boot()`:
 
