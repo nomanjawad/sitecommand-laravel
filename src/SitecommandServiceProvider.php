@@ -48,6 +48,7 @@ class SitecommandServiceProvider extends ServiceProvider
                 Route::get($path, [SetupController::class, 'show'])->name('sitecommand.setup');
                 Route::post($path.'/connect', [SetupController::class, 'connect'])->middleware('throttle:10,10')->name('sitecommand.setup.connect');
                 Route::post($path.'/verify', [SetupController::class, 'verify'])->middleware('throttle:20,10')->name('sitecommand.setup.verify');
+                Route::get($path.'/callback', [SetupController::class, 'callback'])->middleware('throttle:20,10')->name('sitecommand.setup.callback');
                 Route::post($path.'/cancel', [SetupController::class, 'cancel'])->name('sitecommand.setup.cancel');
             });
         }

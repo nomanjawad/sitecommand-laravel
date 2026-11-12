@@ -34,11 +34,43 @@ class SetupTest extends TestCase
         return new GenericUser(['id' => 1, 'email' => 'owner@example.com']);
     }
 
+    private const SITE_ID = '11111111-2222-3333-4444-555555555555';
+
+    private const SITE = 'https://shop.example.com';
+
+    private function startFake(array $extra = []): void
+    {
+        Http::fake($extra + [
+            '*/api/connect/device/poll' => Http::response(['status' => 'approved', 'site_secret' => str_repeat('c', 64), 'site_id' => self::SITE_ID, 'base_path' => '/api/sitecommand', 'site_url' => self::SITE]),
+            '*/api/connect/device' => Http::response(['device_code' => str_repeat('d', 40), 'user_code' => 'ABCD-EFGH', 'verification_uri_complete' => 'https://sitecomand.xyz/connect/device?code=ABCD-EFGH', 'expires_in' => 600, 'interval' => 3]),
+            '*/api/node/verify' => Http::response(['ok' => true, 'steps' => [['id' => 'route', 'ok' => true, 'label' => 'Route and secret', 'detail' => 'Accepted.']]]),
+            '*/api/node/summary' => Http::response($this->summary()),
+        ]);
+    }
+
+    private function summary(): array
+    {
+        return [
+            'site' => ['name' => 'Shop', 'url' => self::SITE, 'framework' => 'laravel', 'connector' => '0.4.0', 'runtime' => '8.4.1', 'verified_at' => now()->subMinute()->toIso8601String(), 'dashboard_url' => 'https://sitecomand.xyz/acme/sites/1'],
+            'health' => ['status' => 'up', 'label' => 'Online', 'ms' => 420, 'checked_at' => now()->subMinutes(5)->toIso8601String()],
+            'uptime' => ['pct30' => 99.95, 'pct7' => 100, 'avg_ms7' => 380, 'days' => [['day' => '2026-11-11', 'pct' => 100], ['day' => '2026-11-12', 'pct' => 97]]],
+            'ssl' => ['expires_at' => now()->addDays(40)->toIso8601String(), 'problem' => null],
+            'domain' => ['expires_at' => now()->addDays(200)->toIso8601String(), 'published' => true],
+            'dependencies' => ['total' => 120, 'vulnerable' => 1, 'worst' => 'high', 'top' => [['name' => 'guzzlehttp/guzzle', 'version' => '7.0.0', 'count' => 2, 'severity' => 'high']]],
+            'problems' => [['kind' => 'slow', 'label' => 'Site slow', 'since' => now()->subHour()->toIso8601String()]],
+        ];
+    }
+
+    private function connectedConfig(): void
+    {
+        config(['sitecommand.secret' => str_repeat('c', 64), 'sitecommand.site_id' => self::SITE_ID]);
+    }
+
     public function test_only_allowed_users_see_the_page(): void
     {
         $this->get('/sitecommand')->assertRedirect('/login');
         $this->actingAs(new GenericUser(['id' => 2, 'email' => 'someone@example.com']))->get('/sitecommand')->assertNotFound();
-        $this->actingAs($this->owner())->get('/sitecommand')->assertOk()->assertSee('Sitecommand connector')->assertSee('Connect with Sitecommand');
+        $this->actingAs($this->owner())->get(self::SITE.'/sitecommand')->assertOk()->assertSee('Connect this site')->assertSee('Connect with Sitecommand')->assertDontSee('Site status');
     }
 
     public function test_an_inertia_visit_is_sent_to_a_full_page_load(): void
@@ -53,26 +85,61 @@ class SetupTest extends TestCase
             ->get('/sitecommand', ['X-Inertia' => 'true'])->assertNotFound();
     }
 
-    public function test_connect_with_a_code_writes_env_and_shows_connected(): void
+    public function test_connect_sends_you_to_sitecommand_with_a_way_back(): void
     {
-        Http::fake([
-            '*/api/connect/device/poll' => Http::sequence()
-                ->push(['status' => 'pending'])
-                ->push(['status' => 'approved', 'site_secret' => str_repeat('c', 64), 'site_id' => '11111111-2222-3333-4444-555555555555', 'base_path' => '/api/sitecommand', 'site_url' => 'https://shop.example.com']),
-            '*/api/connect/device' => Http::response(['device_code' => str_repeat('d', 40), 'user_code' => 'ABCD-EFGH', 'verification_uri_complete' => 'https://hub.test/connect/device?code=ABCD-EFGH', 'expires_in' => 600, 'interval' => 3]),
-        ]);
+        $this->startFake();
         $this->actingAs($this->owner());
-        $this->post('/sitecommand/connect', ['url' => 'https://shop.example.com'])->assertRedirect('/sitecommand');
-        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/api/connect/device') && $r['framework'] === 'laravel' && $r['site_url'] === 'https://shop.example.com');
+        $res = $this->post(self::SITE.'/sitecommand/connect');
+        $res->assertRedirect('https://sitecomand.xyz/connect/device?code=ABCD-EFGH&return='.rawurlencode(self::SITE.'/sitecommand/callback'));
+        // The address connected is the one the page is open on; no form field needed.
+        Http::assertSent(fn ($r) => $r->url() === 'https://sitecomand.xyz/api/connect/device' && $r['framework'] === 'laravel' && $r['site_url'] === self::SITE);
+    }
 
-        $this->get('/sitecommand')->assertOk()->assertSee('ABCD-EFGH')->assertSee('http-equiv="refresh"', false);
-        $this->get('/sitecommand')->assertOk()->assertSee('Connected. The secret is saved in .env.');
+    public function test_back_from_sitecommand_the_site_saves_verifies_and_shows_the_popup(): void
+    {
+        $this->startFake();
+        $this->actingAs($this->owner());
+        $this->post(self::SITE.'/sitecommand/connect');
+        $this->get(self::SITE.'/sitecommand/callback?sc=approved')->assertRedirect('/sitecommand');
 
         $env = (string) file_get_contents($this->envDir.'/.env');
         $this->assertStringStartsWith("APP_NAME=Shop\n", $env);
         $this->assertStringContainsString('SITECOMMAND_SECRET='.str_repeat('c', 64), $env);
-        $this->assertStringContainsString('SITECOMMAND_SITE_ID=11111111-2222-3333-4444-555555555555', $env);
-        $this->assertSame(str_repeat('c', 64), Settings::secret());
+        $this->assertStringContainsString('SITECOMMAND_SITE_ID='.self::SITE_ID, $env);
+        $this->assertStringContainsString('SITECOMMAND_HUB=https://sitecomand.xyz', $env);
+        $this->assertStringNotContainsString('SITECOMMAND_SETUP', $env);
+        // Verify ran by itself, with the new secret.
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/api/node/verify') && $r['site_id'] === self::SITE_ID && $r['proof'] === hash_hmac('sha256', "verify\n".self::SITE_ID."\n{$r['timestamp']}\n".hash('sha256', ''), str_repeat('c', 64)));
+
+        $page = $this->get(self::SITE.'/sitecommand')->assertOk();
+        $page->assertSee('Verified')->assertSee('Back to the website')->assertSee('See the status');
+        // The page now shows the site's status from Sitecommand.
+        $page->assertSee('Site status')->assertSee('Online · 420 ms')->assertSee('99.95% · last 30 days')->assertSee('1 of 120 with known vulnerabilities')
+            ->assertSee('Site slow')->assertSee('guzzlehttp/guzzle')->assertSee('Open in Sitecommand')->assertDontSee('Connect this site');
+        // The popup shows once.
+        $this->get(self::SITE.'/sitecommand')->assertOk()->assertDontSee('Back to the website');
+        // A second visit to the callback has nothing left to collect.
+        $this->get(self::SITE.'/sitecommand/callback?sc=approved')->assertRedirect('/sitecommand');
+    }
+
+    public function test_cancelled_in_sitecommand(): void
+    {
+        $this->startFake();
+        $this->actingAs($this->owner());
+        $this->post(self::SITE.'/sitecommand/connect');
+        $this->get(self::SITE.'/sitecommand/callback?sc=denied')->assertRedirect('/sitecommand');
+        $this->get(self::SITE.'/sitecommand')->assertSee('cancelled in Sitecommand')->assertSee('Connect with Sitecommand');
+        Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/poll'));
+    }
+
+    public function test_a_failed_automatic_verify_explains_and_keeps_the_secret(): void
+    {
+        $this->startFake(['*/api/node/verify' => Http::response(['ok' => false, 'steps' => [['id' => 'route', 'ok' => false, 'label' => 'Route and secret', 'detail' => 'No answer.', 'fix' => 'Deploy first.']]], 409)]);
+        $this->actingAs($this->owner());
+        $this->post(self::SITE.'/sitecommand/connect');
+        $this->get(self::SITE.'/sitecommand/callback?sc=approved');
+        $this->assertStringContainsString('SITECOMMAND_SECRET=', (string) file_get_contents($this->envDir.'/.env'));
+        $this->get(self::SITE.'/sitecommand')->assertSee('could not verify the site yet')->assertSee('Deploy first.')->assertDontSee('Back to the website');
     }
 
     public function test_hubs_go_main_first_then_the_fallback(): void
@@ -88,20 +155,15 @@ class SetupTest extends TestCase
         $this->assertSame('https://sitecomand.xyz', Settings::hub());
     }
 
-    public function test_connect_falls_back_when_the_main_address_is_down_and_writes_the_main_one(): void
+    public function test_connect_falls_back_when_the_main_address_is_down(): void
     {
         Http::fake([
             'sitecomand.xyz/*' => Http::response('<html>parked</html>', 200, ['Content-Type' => 'text/html']),
-            'siteconnector.vercel.app/api/connect/device/poll' => Http::response(['status' => 'approved', 'site_secret' => str_repeat('e', 64), 'site_id' => '11111111-2222-3333-4444-555555555555']),
             'siteconnector.vercel.app/api/connect/device' => Http::response(['device_code' => str_repeat('d', 40), 'user_code' => 'WXYZ-1234', 'verification_uri_complete' => 'https://siteconnector.vercel.app/connect/device?code=WXYZ-1234', 'expires_in' => 600, 'interval' => 3]),
         ]);
         $this->actingAs($this->owner());
-        $this->post('/sitecommand/connect', ['url' => 'https://shop.example.com'])->assertRedirect('/sitecommand');
+        $this->post(self::SITE.'/sitecommand/connect')->assertRedirect('https://siteconnector.vercel.app/connect/device?code=WXYZ-1234&return='.rawurlencode(self::SITE.'/sitecommand/callback'));
         Http::assertSent(fn ($r) => $r->url() === 'https://sitecomand.xyz/api/connect/device');
-        Http::assertSent(fn ($r) => $r->url() === 'https://siteconnector.vercel.app/api/connect/device');
-        $this->get('/sitecommand')->assertOk()->assertSee('Connected. The secret is saved in .env.');
-        $env = (string) file_get_contents($this->envDir.'/.env');
-        $this->assertStringContainsString('SITECOMMAND_HUB=https://sitecomand.xyz', $env);
     }
 
     public function test_a_json_answer_from_the_main_address_is_final(): void
@@ -111,49 +173,52 @@ class SetupTest extends TestCase
             'siteconnector.vercel.app/*' => Http::response(['device_code' => 'x'], 200),
         ]);
         $this->actingAs($this->owner());
-        $this->post('/sitecommand/connect', ['url' => 'https://shop.example.com'])->assertRedirect('/sitecommand');
+        $this->post(self::SITE.'/sitecommand/connect')->assertRedirect('/sitecommand');
         Http::assertNotSent(fn ($r) => str_contains($r->url(), 'vercel.app'));
-        $this->get('/sitecommand')->assertSee('Site limit reached.');
+        $this->get(self::SITE.'/sitecommand')->assertSee('Site limit reached.');
     }
 
-    public function test_verify_falls_back_on_a_server_error(): void
+    public function test_the_status_falls_back_and_says_when_it_cannot_load(): void
     {
-        config(['sitecommand.site_id' => '11111111-2222-3333-4444-555555555555']);
-        Http::fake([
-            'sitecomand.xyz/*' => Http::response('Bad gateway', 502),
-            'siteconnector.vercel.app/api/node/verify' => Http::response(['ok' => false, 'steps' => [['id' => 'route', 'ok' => false, 'label' => 'Route and secret', 'detail' => 'No answer.']]], 409),
-        ]);
-        $this->actingAs($this->owner());
-        $this->post('/sitecommand/verify')->assertRedirect('/sitecommand');
-        $this->get('/sitecommand')->assertSee('Route and secret')->assertSee('Not verified yet');
+        $this->connectedConfig();
+        Http::fake(['sitecomand.xyz/*' => Http::response('Bad gateway', 502), 'siteconnector.vercel.app/api/node/summary' => Http::response($this->summary())]);
+        $this->actingAs($this->owner())->get(self::SITE.'/sitecommand')->assertOk()->assertSee('Online · 420 ms');
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/api/node/summary') && $r['proof'] === hash_hmac('sha256', "summary\n".self::SITE_ID."\n{$r['timestamp']}\n".hash('sha256', ''), str_repeat('c', 64)));
     }
 
-    public function test_a_failed_verify_shows_the_checklist_and_keeps_the_page(): void
+    public function test_a_site_sitecommand_no_longer_knows_says_so(): void
     {
-        config(['sitecommand.site_id' => '11111111-2222-3333-4444-555555555555']);
-        Http::fake(['*/api/node/verify' => Http::response(['ok' => false, 'checked_at' => 'now', 'steps' => [['id' => 'route', 'ok' => false, 'label' => 'Route and secret', 'detail' => 'No answer.', 'fix' => 'Deploy first.']]], 409)]);
+        $this->connectedConfig();
+        Http::fake(['*/api/node/summary' => Http::response(['error' => 'not_found'], 404)]);
+        $this->actingAs($this->owner())->get(self::SITE.'/sitecommand')->assertOk()->assertSee('does not know this site')->assertSee('Reconnect');
+    }
+
+    public function test_verify_again_shows_the_popup_or_the_checklist(): void
+    {
+        $this->connectedConfig();
+        $this->startFake();
         $this->actingAs($this->owner());
-        $this->post('/sitecommand/verify')->assertRedirect('/sitecommand');
-        Http::assertSent(fn ($r) => $r['site_id'] === '11111111-2222-3333-4444-555555555555' && strlen((string) $r['proof']) === 64);
-        $this->get('/sitecommand')->assertOk()->assertSee('Route and secret')->assertSee('Deploy first.')->assertSee('Not verified yet');
+        $this->post(self::SITE.'/sitecommand/verify')->assertRedirect('/sitecommand');
+        $this->get(self::SITE.'/sitecommand')->assertSee('Back to the website');
         $this->assertStringNotContainsString('SITECOMMAND_SETUP', (string) file_get_contents($this->envDir.'/.env'));
     }
 
-    public function test_a_passed_verify_switches_the_page_off(): void
+    public function test_a_failed_verify_shows_the_checklist(): void
     {
-        config(['sitecommand.site_id' => '11111111-2222-3333-4444-555555555555']);
-        Http::fake(['*/api/node/verify' => Http::response(['ok' => true, 'checked_at' => 'now', 'steps' => [['id' => 'route', 'ok' => true, 'label' => 'Route and secret', 'detail' => 'Accepted.']]])]);
+        $this->connectedConfig();
+        $this->startFake(['*/api/node/verify' => Http::response(['ok' => false, 'steps' => [['id' => 'route', 'ok' => false, 'label' => 'Route and secret', 'detail' => 'No answer.', 'fix' => 'Deploy first.']]], 409)]);
         $this->actingAs($this->owner());
-        $this->post('/sitecommand/verify')->assertOk()
-            ->assertSee('Verified: the site shows as connected')->assertSee('Route and secret')->assertSee('This page is now switched off');
-        $env = (string) file_get_contents($this->envDir.'/.env');
-        $this->assertStringContainsString("SITECOMMAND_SETUP=false", $env);
-        $this->assertStringStartsWith("APP_NAME=Shop\n", $env);
-        $this->assertSame('sitecommand', config('sitecommand.setup.path'));
-        // From now on every setup route is a 404, for the owner too.
-        $this->get('/sitecommand')->assertNotFound();
-        $this->post('/sitecommand/verify')->assertNotFound();
-        $this->post('/sitecommand/connect', ['url' => 'https://shop.example.com'])->assertNotFound();
+        $this->post(self::SITE.'/sitecommand/verify')->assertRedirect('/sitecommand');
+        $this->get(self::SITE.'/sitecommand')->assertOk()->assertSee('Route and secret')->assertSee('Deploy first.')->assertSee('Not verified yet');
+    }
+
+    public function test_the_page_can_still_be_switched_off_by_hand(): void
+    {
+        $this->connectedConfig();
+        config(['sitecommand.setup.enabled' => false]);
+        $this->actingAs($this->owner())->get('/sitecommand')->assertNotFound();
+        $this->post('/sitecommand/connect')->assertNotFound();
+        $this->get('/sitecommand/callback')->assertNotFound();
         // The connector itself keeps answering (unsigned = its own plain 404).
         $this->get('/api/sitecommand/info')->assertNotFound()->assertSee('Not Found');
     }

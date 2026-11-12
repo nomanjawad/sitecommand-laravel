@@ -2,6 +2,10 @@
 
 ## 0.4.0
 
+- **Connect with Sitecommand works like the WordPress plugin**: the button sends you to Sitecommand to approve (no code to copy), you come straight back to `/sitecommand/callback`, and the site saves its secret, runs Verify by itself and shows a Verified popup (Back to the website / See the status). Needs the hub's return-to-site approval (hub 2026-11-12).
+- **`/sitecommand` shows the site's status** once connected, read from Sitecommand with a proof of the secret (`POST /api/node/summary`, purpose `summary`): status and response time, 30-day uptime with daily bars, SSL and domain expiry, packages with known vulnerabilities, open problems, connector and PHP version, last verified, Open in Sitecommand; plus Verify again and Reconnect.
+- The page no longer switches itself off after Verify (0.3.0); `SITECOMMAND_SETUP=false` still turns it off by hand.
+- The address connected is the one the page is open on (APP_URL only as a fallback), so no address field.
 - **Main address first, vercel.app as fallback**: connect, the approval check and verify (setup page and the `sitecommand:connect` / `sitecommand:verify` commands) go to `https://sitecomand.xyz` and fall back to `https://siteconnector.vercel.app` only when the main address cannot be reached (no connection, a 5xx, or an answer that is not JSON such as a parking page). A JSON answer from the main address, even an error, is final. An `.env` that still says the vercel.app address gets the same order; a self-hosted `SITECOMMAND_HUB` or `--hub` is used alone. Connect now writes `SITECOMMAND_HUB=https://sitecomand.xyz`.
 
 ## 0.3.0

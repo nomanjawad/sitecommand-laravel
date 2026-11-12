@@ -73,9 +73,29 @@ final class Hub
     public static function verify(string|array $hubs, string $siteId, string $secret): array
     {
         $timestamp = (string) time();
-        $proof = hash_hmac('sha256', "verify\n{$siteId}\n{$timestamp}\n".hash('sha256', ''), $secret);
 
-        return self::call((array) $hubs, '/api/node/verify', ['site_id' => $siteId, 'timestamp' => $timestamp, 'proof' => $proof]);
+        return self::call((array) $hubs, '/api/node/verify', ['site_id' => $siteId, 'timestamp' => $timestamp, 'proof' => self::proof($secret, 'verify', $siteId, $timestamp)]);
+    }
+
+    /**
+     * This site's status as Sitecommand sees it (status, uptime, SSL, domain,
+     * vulnerable packages, open problems), for the setup page. Same proof as
+     * Verify with its own purpose, so one cannot be replayed as the other.
+     *
+     * @param  list<string>  $hubs
+     * @return array{0: int, 1: array<string, mixed>|null, 2: string}
+     */
+    public static function summary(array $hubs, string $siteId, string $secret): array
+    {
+        $timestamp = (string) time();
+
+        return self::call($hubs, '/api/node/summary', ['site_id' => $siteId, 'timestamp' => $timestamp, 'proof' => self::proof($secret, 'summary', $siteId, $timestamp)], 8);
+    }
+
+    /** HMAC of "<purpose>\n<site id>\n<timestamp>\n<sha256 of empty>" with the secret (hub lib/modules/node/proof.ts). Pure. */
+    public static function proof(string $secret, string $purpose, string $siteId, string $timestamp): string
+    {
+        return hash_hmac('sha256', "{$purpose}\n{$siteId}\n{$timestamp}\n".hash('sha256', ''), $secret);
     }
 
     /** Print a Verify report. */
