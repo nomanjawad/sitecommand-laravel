@@ -15,7 +15,7 @@ use InvalidArgumentException;
  */
 class Sitecommand
 {
-    public const VERSION = '0.2.0';
+    public const VERSION = '0.2.1';
 
     /** @var array<string, Closure> */
     private array $health = [];

@@ -41,6 +41,18 @@ class SetupTest extends TestCase
         $this->actingAs($this->owner())->get('/sitecommand')->assertOk()->assertSee('Sitecommand connector')->assertSee('Connect with Sitecommand');
     }
 
+    public function test_an_inertia_visit_is_sent_to_a_full_page_load(): void
+    {
+        // Inertia would otherwise show the page in a sandboxed iframe where forms are blocked.
+        $this->actingAs($this->owner())
+            ->get('/sitecommand', ['X-Inertia' => 'true', 'X-Requested-With' => 'XMLHttpRequest'])
+            ->assertStatus(409)
+            ->assertHeader('X-Inertia-Location', 'http://localhost/sitecommand');
+        // Not allowed stays a 404, Inertia or not.
+        $this->actingAs(new GenericUser(['id' => 2, 'email' => 'someone@example.com']))
+            ->get('/sitecommand', ['X-Inertia' => 'true'])->assertNotFound();
+    }
+
     public function test_connect_with_a_code_writes_env_and_shows_connected(): void
     {
         Http::fake([

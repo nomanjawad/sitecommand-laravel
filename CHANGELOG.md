@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Setup page: an Inertia visit (for example the login form's redirect back to `/sitecommand`) now gets Inertia's full-page answer (409 + `X-Inertia-Location`) instead of the HTML, which Inertia showed in a sandboxed iframe where Connect and Verify could not submit.
+
 ## 0.2.0
 
 - **Setup page at `/sitecommand`** for hosts without a terminal: status, Connect with a code (writes the secret into `.env`, or shows the lines to paste when `.env` is not writable), Verify / recheck from the browser. Behind the app's login and the `viewSitecommand` gate (default: local, or the emails in `SITECOMMAND_ADMINS`); 404 for everyone else. No JavaScript.

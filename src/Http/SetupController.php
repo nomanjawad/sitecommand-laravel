@@ -26,6 +26,16 @@ class SetupController
     public function show(Request $request): Response
     {
         $this->authorize($request);
+
+        // An Inertia app fetches this page with XHR when it follows a redirect
+        // (for example the login form's redirect to the intended URL) and then
+        // shows the plain HTML in a sandboxed iframe where forms cannot submit.
+        // Inertia's own answer for "load this as a full page" is 409 with
+        // X-Inertia-Location; nothing in the session is touched first.
+        if ($request->headers->has('X-Inertia')) {
+            return response('', 409)->header('X-Inertia-Location', $request->fullUrl());
+        }
+
         $flash = $request->session()->pull('sitecommand.flash');
         $device = $request->session()->get(self::SESSION);
         $lines = null;
