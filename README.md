@@ -23,7 +23,7 @@ Who may open the page is the `viewSitecommand` gate. By default: anyone signed i
 Gate::define('viewSitecommand', fn ($user) => $user->hasRole('admin'));
 ```
 
-Everyone else gets a 404. Turn the page off with `SITECOMMAND_SETUP=false`; move it with `SITECOMMAND_SETUP_PATH`.
+Everyone else gets a 404. **Once Verify passes, the page switches itself off** (it writes `SITECOMMAND_SETUP=false` into `.env`, or shows that line to paste) and answers 404 for everyone from then on; delete the line to bring it back. Turn it off by hand with the same line; move it with `SITECOMMAND_SETUP_PATH`. In an Inertia app the page always opens as a full page, never in Inertia's modal.
 
 **2. With the file manager.** Use **Add app → Laravel** in the dashboard: it shows the secret once. Put it in the site's `.env` (`SITECOMMAND_SECRET=…`, and `SITECOMMAND_SITE_ID=…` if you want to Verify from `/sitecommand`), save, and press **Verify** in the dashboard. No `config:cache` needed: while the config is cached, the connector reads its own `SITECOMMAND_` lines straight from `.env`.
 

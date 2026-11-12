@@ -35,6 +35,23 @@ final class Settings
         return rtrim(self::get('hub') ?: 'https://siteconnector.vercel.app', '/');
     }
 
+    /**
+     * Whether the setup page is on. It switches itself off (SITECOMMAND_SETUP=false
+     * in .env) once Verify passes; checked on every setup request, because with
+     * cached routes the routes exist whatever the config said at boot.
+     */
+    public static function setupOn(): bool
+    {
+        if (app()->configurationIsCached()) {
+            $file = self::fromFile();
+            if (isset($file['SITECOMMAND_SETUP']) && $file['SITECOMMAND_SETUP'] !== '') {
+                return ! in_array(strtolower($file['SITECOMMAND_SETUP']), ['false', '0', 'off', 'no', '(false)'], true);
+            }
+        }
+
+        return (bool) config('sitecommand.setup.enabled', true);
+    }
+
     private static function get(string $key): ?string
     {
         if (app()->configurationIsCached()) {

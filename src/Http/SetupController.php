@@ -95,7 +95,7 @@ class SetupController
         return redirect($this->base());
     }
 
-    public function verify(Request $request): RedirectResponse
+    public function verify(Request $request): Response
     {
         $this->authorize($request);
         $secret = Settings::secret();
@@ -109,6 +109,17 @@ class SetupController
         }
         if (! is_array($report) || ! isset($report['steps'])) {
             return $this->back($request, 'bad', 'Sitecommand did not answer'.(isset($report['message']) ? ': '.$report['message'] : '.'));
+        }
+        if (($report['ok'] ?? false) === true) {
+            // Verified: the page has done its job. It switches itself off for
+            // good (404 from now on); delete the line from .env to bring it back.
+            $written = Hub::writeEnv(['SITECOMMAND_SETUP' => 'false']);
+
+            return response()->view('sitecommand::done', [
+                'report' => $report,
+                'written' => $written,
+                'base' => $this->base(),
+            ])->header('Cache-Control', 'no-store, private')->header('X-Robots-Tag', 'noindex');
         }
         $request->session()->flash('sitecommand.report', $report);
 
@@ -167,7 +178,7 @@ class SetupController
 
     private function authorize(Request $request): void
     {
-        if (! $request->user() || ! Gate::forUser($request->user())->allows('viewSitecommand')) {
+        if (! Settings::setupOn() || ! $request->user() || ! Gate::forUser($request->user())->allows('viewSitecommand')) {
             abort(404);
         }
     }

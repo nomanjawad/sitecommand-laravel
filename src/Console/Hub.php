@@ -64,6 +64,12 @@ final class Hub
             return false;
         }
         foreach ($values as $k => $v) {
+            if ($k === 'SITECOMMAND_SETUP') {
+                // The setup switch lives inside the `setup` array; never replace the array.
+                config(['sitecommand.setup.enabled' => ! in_array(strtolower((string) $v), ['false', '0', 'off', 'no'], true)]);
+
+                continue;
+            }
             config(['sitecommand.'.strtolower(substr($k, strlen('SITECOMMAND_'))) => $v]);
         }
         \Sitecommand\Laravel\Settings::flush();

@@ -75,14 +75,49 @@ class SetupTest extends TestCase
         $this->assertSame(str_repeat('c', 64), Settings::secret());
     }
 
-    public function test_verify_shows_the_hubs_checklist(): void
+    public function test_a_failed_verify_shows_the_checklist_and_keeps_the_page(): void
+    {
+        config(['sitecommand.site_id' => '11111111-2222-3333-4444-555555555555']);
+        Http::fake(['*/api/node/verify' => Http::response(['ok' => false, 'checked_at' => 'now', 'steps' => [['id' => 'route', 'ok' => false, 'label' => 'Route and secret', 'detail' => 'No answer.', 'fix' => 'Deploy first.']]], 409)]);
+        $this->actingAs($this->owner());
+        $this->post('/sitecommand/verify')->assertRedirect('/sitecommand');
+        Http::assertSent(fn ($r) => $r['site_id'] === '11111111-2222-3333-4444-555555555555' && strlen((string) $r['proof']) === 64);
+        $this->get('/sitecommand')->assertOk()->assertSee('Route and secret')->assertSee('Deploy first.')->assertSee('Not verified yet');
+        $this->assertStringNotContainsString('SITECOMMAND_SETUP', (string) file_get_contents($this->envDir.'/.env'));
+    }
+
+    public function test_a_passed_verify_switches_the_page_off(): void
     {
         config(['sitecommand.site_id' => '11111111-2222-3333-4444-555555555555']);
         Http::fake(['*/api/node/verify' => Http::response(['ok' => true, 'checked_at' => 'now', 'steps' => [['id' => 'route', 'ok' => true, 'label' => 'Route and secret', 'detail' => 'Accepted.']]])]);
         $this->actingAs($this->owner());
-        $this->post('/sitecommand/verify')->assertRedirect('/sitecommand');
-        Http::assertSent(fn ($r) => $r['site_id'] === '11111111-2222-3333-4444-555555555555' && strlen((string) $r['proof']) === 64);
-        $this->get('/sitecommand')->assertSee('Route and secret')->assertSee('Verified: the site shows as connected');
+        $this->post('/sitecommand/verify')->assertOk()
+            ->assertSee('Verified: the site shows as connected')->assertSee('Route and secret')->assertSee('This page is now switched off');
+        $env = (string) file_get_contents($this->envDir.'/.env');
+        $this->assertStringContainsString("SITECOMMAND_SETUP=false", $env);
+        $this->assertStringStartsWith("APP_NAME=Shop\n", $env);
+        $this->assertSame('sitecommand', config('sitecommand.setup.path'));
+        // From now on every setup route is a 404, for the owner too.
+        $this->get('/sitecommand')->assertNotFound();
+        $this->post('/sitecommand/verify')->assertNotFound();
+        $this->post('/sitecommand/connect', ['url' => 'https://shop.example.com'])->assertNotFound();
+        // The connector itself keeps answering (unsigned = its own plain 404).
+        $this->get('/api/sitecommand/info')->assertNotFound()->assertSee('Not Found');
+    }
+
+    public function test_with_cached_config_the_switch_is_read_from_env(): void
+    {
+        $this->assertTrue(Settings::setupOn());
+        file_put_contents($this->envDir.'/.env', "APP_NAME=Shop\nSITECOMMAND_SETUP=false\n");
+        $this->app->instance('config_loaded_from_cache', true);
+        Settings::flush();
+        try {
+            $this->assertFalse(Settings::setupOn());
+            $this->actingAs($this->owner())->get('/sitecommand')->assertNotFound();
+        } finally {
+            $this->app->instance('config_loaded_from_cache', false);
+            Settings::flush();
+        }
     }
 
     public function test_verify_without_a_site_id_explains(): void

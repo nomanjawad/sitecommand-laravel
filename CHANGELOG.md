@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- **The setup page switches itself off once Verify passes**: it writes `SITECOMMAND_SETUP=false` into `.env` (or shows the line to paste when `.env` is not writable) and every setup route answers 404 from then on, checked on each request so cached routes and cached config follow it. Delete the line to open the page again.
+- `Hub::writeEnv` no longer replaces the whole `setup` config array when it writes `SITECOMMAND_SETUP`.
+
 ## 0.2.1
 
 - Setup page: an Inertia visit (for example the login form's redirect back to `/sitecommand`) now gets Inertia's full-page answer (409 + `X-Inertia-Location`) instead of the HTML, which Inertia showed in a sandboxed iframe where Connect and Verify could not submit.
