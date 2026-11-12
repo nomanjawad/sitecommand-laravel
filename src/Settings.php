@@ -30,9 +30,41 @@ final class Settings
         return $v === null || $v === '' ? null : $v;
     }
 
+    /** Sitecommand's main address. */
+    public const MAIN_HUB = 'https://sitecomand.xyz';
+
+    /** Tried in order when the main address cannot be reached (for example if the domain lapses). */
+    public const FALLBACK_HUBS = ['https://siteconnector.vercel.app'];
+
+    /** The hub to show and to write into .env: the first of hubs(). */
     public static function hub(): string
     {
-        return rtrim(self::get('hub') ?: 'https://siteconnector.vercel.app', '/');
+        return self::hubs()[0];
+    }
+
+    /**
+     * The hubs to try, in order. Sitecommand's own addresses always go main
+     * first, then the fallbacks, whichever of them SITECOMMAND_HUB names (so an
+     * .env written with the old vercel.app address still prefers the main one).
+     * Any other SITECOMMAND_HUB (a self-hosted hub) is used alone.
+     *
+     * @return non-empty-list<string>
+     */
+    public static function hubs(): array
+    {
+        return self::hubsFor(self::get('hub'));
+    }
+
+    /** @return non-empty-list<string> Pure. */
+    public static function hubsFor(?string $configured): array
+    {
+        $known = array_merge([self::MAIN_HUB], self::FALLBACK_HUBS);
+        $configured = rtrim(trim((string) $configured), '/');
+        if ($configured === '' || in_array(strtolower($configured), $known, true)) {
+            return $known;
+        }
+
+        return [$configured];
     }
 
     /**

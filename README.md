@@ -1,6 +1,6 @@
 # sitecommand/laravel
 
-Connect a Laravel app to [Sitecommand](https://siteconnector.vercel.app): health (database, cache, storage, disk, queue, config and your own checks), recent server errors from the app's log, Composer and npm dependencies (checked for known vulnerabilities by the hub) and the actions **you** choose to expose — for your dashboard and for your AI assistant through Sitecommand.
+Connect a Laravel app to [Sitecommand](https://sitecomand.xyz): health (database, cache, storage, disk, queue, config and your own checks), recent server errors from the app's log, Composer and npm dependencies (checked for known vulnerabilities by the hub) and the actions **you** choose to expose — for your dashboard and for your AI assistant through Sitecommand.
 
 - **Read-only by design.** It never runs arbitrary code, writes files, runs shell commands or reads your `.env`. The only things that can run are the actions you register.
 - **Signed requests only.** Every request is signed with your site secret (HMAC-SHA256, ±5 minutes, single-use nonce). Anything else gets a plain `404`, so the route does not even reveal it exists. Every answer is signed back, so nothing in between can fake it.

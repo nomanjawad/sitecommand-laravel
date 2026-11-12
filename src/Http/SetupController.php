@@ -66,7 +66,7 @@ class SetupController
         if ($url === null) {
             return $this->back($request, 'bad', 'Enter the site\'s public https:// address.');
         }
-        [$status, $start] = Hub::post(Settings::hub().'/api/connect/device', [
+        [$status, $start, $hub] = Hub::call(Hub::hubs(), '/api/connect/device', [
             'site_url' => $url,
             'framework' => 'laravel',
             'app_name' => (string) config('app.name'),
@@ -80,7 +80,7 @@ class SetupController
             'user_code' => $start['user_code'],
             'link' => $start['verification_uri_complete'],
             'expires_at' => time() + (int) ($start['expires_in'] ?? 600),
-            'hub' => Settings::hub(),
+            'hub' => $hub,
             'url' => $url,
         ]);
 
@@ -103,7 +103,7 @@ class SetupController
         if ($secret === null || strlen($secret) < 32 || $siteId === null) {
             return $this->back($request, 'bad', 'Not connected yet: connect first, or put SITECOMMAND_SECRET and SITECOMMAND_SITE_ID in .env.');
         }
-        [$status, $report] = Hub::verify(Settings::hub(), $siteId, $secret);
+        [$status, $report] = Hub::verify(Hub::hubs(), $siteId, $secret);
         if ($status === 404) {
             return $this->back($request, 'bad', 'Sitecommand does not know this site with this secret (removed from the dashboard, or the secret was replaced). Connect again.');
         }
@@ -139,7 +139,8 @@ class SetupController
 
             return ['failed', 'The code expired. Connect again.', null];
         }
-        [, $poll] = Hub::post($device['hub'].'/api/connect/device/poll', ['device_code' => $device['device_code']], 15);
+        // The code lives in Sitecommand's database, so any of its addresses can be asked.
+        [, $poll] = Hub::call(Hub::hubs(null, (string) $device['hub']), '/api/connect/device/poll', ['device_code' => $device['device_code']], 15);
         $s = $poll['status'] ?? 'unknown';
         if ($s === 'pending' || $s === 'slow_down') {
             return ['pending', '', null];
@@ -148,7 +149,7 @@ class SetupController
         if ($s !== 'approved' || empty($poll['site_secret'])) {
             return ['failed', $s === 'denied' ? 'The request was denied in Sitecommand.' : ($s === 'expired' ? 'The code expired. Connect again.' : 'Sitecommand no longer knows this request. Connect again.'), null];
         }
-        $values = ['SITECOMMAND_SECRET' => (string) $poll['site_secret'], 'SITECOMMAND_SITE_ID' => (string) $poll['site_id'], 'SITECOMMAND_HUB' => (string) $device['hub']];
+        $values = ['SITECOMMAND_SECRET' => (string) $poll['site_secret'], 'SITECOMMAND_SITE_ID' => (string) $poll['site_id'], 'SITECOMMAND_HUB' => Settings::hub()];
         if (! Hub::writeEnv($values)) {
             // Shown once, to the signed-in admin only: the page cannot write .env here.
             return ['connected', 'Connected, but .env is not writable here. Add the lines below to the site\'s .env (file manager), save, then press Verify.', $values];
@@ -169,7 +170,7 @@ class SetupController
             ['label' => 'Connector', 'ok' => true, 'detail' => 'sitecommand/laravel '.Sitecommand::VERSION.', route '.SitecommandServiceProvider::basePath().'/…'.(Route::has('sitecommand.connector') ? '' : ' (not registered: re-cache routes)')],
             ['label' => 'Secret', 'ok' => $secret !== null && strlen($secret) >= 32, 'detail' => $secret !== null && strlen($secret) >= 32 ? 'Set (…'.substr($secret, -4).')' : 'Not set'],
             ['label' => 'Site id', 'ok' => $siteId !== null, 'detail' => $siteId ?? 'Not set (needed for Verify from here)'],
-            ['label' => 'Hub', 'ok' => true, 'detail' => Settings::hub()],
+            ['label' => 'Hub', 'ok' => true, 'detail' => implode(', then ', Settings::hubs())],
             ['label' => 'Site address', 'ok' => $appUrl !== null && str_starts_with($appUrl, 'https://'), 'detail' => $appUrl ? "APP_URL is {$appUrl}" : 'APP_URL is not an https:// address'],
             ['label' => '.env', 'ok' => is_writable($env) ? true : null, 'detail' => is_writable($env) ? 'Writable: Connect saves the secret by itself.' : 'Not writable: Connect shows the lines to paste.'],
             ['label' => 'Config cache', 'ok' => null, 'detail' => app()->configurationIsCached() ? 'Cached: the connector reads its SITECOMMAND_ lines from .env directly, so edits work at once.' : 'Not cached.'],

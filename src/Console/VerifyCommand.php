@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 /** Ask the hub to run Verify against the deployed app (the same check as the dashboard button). */
 class VerifyCommand extends Command
 {
-    protected $signature = 'sitecommand:verify {--hub= : The Sitecommand hub (default: SITECOMMAND_HUB)}';
+    protected $signature = 'sitecommand:verify {--hub= : The Sitecommand hub (default: https://sitecomand.xyz, then https://siteconnector.vercel.app)}';
 
     protected $description = 'Ask Sitecommand to check this app\'s connector';
 
@@ -20,7 +20,7 @@ class VerifyCommand extends Command
 
             return self::FAILURE;
         }
-        [$status, $report] = Hub::verify(Hub::url($this->option('hub')), $siteId, $secret);
+        [$status, $report] = Hub::verify(Hub::hubs($this->option('hub')), $siteId, $secret);
         if ($status === 404) {
             $this->error('The hub does not know this site id with this secret. Connect again: php artisan sitecommand:connect');
 

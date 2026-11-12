@@ -9,7 +9,46 @@ final class Hub
 {
     public static function url(?string $override = null): string
     {
-        return $override ? rtrim($override, '/') : \Sitecommand\Laravel\Settings::hub();
+        return self::hubs($override)[0];
+    }
+
+    /**
+     * The hubs to try: a --hub given on the command line alone, else
+     * Settings::hubs() (main address, then the fallbacks).
+     *
+     * @return non-empty-list<string>
+     */
+    public static function hubs(?string $override = null, ?string $prefer = null): array
+    {
+        $list = $override ? [rtrim($override, '/')] : \Sitecommand\Laravel\Settings::hubs();
+        if ($prefer !== null && in_array($prefer, $list, true)) {
+            $list = array_values(array_unique(array_merge([$prefer], $list)));
+        }
+
+        return $list;
+    }
+
+    /**
+     * POST to the first hub that answers. The next hub is tried only when this
+     * one could not be reached: no connection, a 5xx, or an answer that is not
+     * JSON (a parking page if the domain lapsed). A JSON answer, even an
+     * error, is the hub's answer and is returned as is.
+     *
+     * @param  list<string>  $hubs
+     * @return array{0: int, 1: array<string, mixed>|null, 2: string}
+     */
+    public static function call(array $hubs, string $path, array $body, int $timeout = 60): array
+    {
+        $last = [0, ['message' => 'No hub to call.'], $hubs[0] ?? ''];
+        foreach ($hubs as $hub) {
+            [$status, $json] = self::post($hub.$path, $body, $timeout);
+            $last = [$status, $json, $hub];
+            if ($status !== 0 && $status < 500 && is_array($json)) {
+                return $last;
+            }
+        }
+
+        return $last;
     }
 
     /** @return array{0: int, 1: array<string, mixed>|null} */
@@ -24,13 +63,19 @@ final class Hub
         }
     }
 
-    /** Ask the hub to run Verify against the deployed app; proves this machine holds the secret. */
-    public static function verify(string $hub, string $siteId, string $secret): array
+    /**
+     * Ask the hub to run Verify against the deployed app; proves this machine
+     * holds the secret. Tries the hubs in order like call().
+     *
+     * @param  string|list<string>  $hubs
+     * @return array{0: int, 1: array<string, mixed>|null, 2: string}
+     */
+    public static function verify(string|array $hubs, string $siteId, string $secret): array
     {
         $timestamp = (string) time();
         $proof = hash_hmac('sha256', "verify\n{$siteId}\n{$timestamp}\n".hash('sha256', ''), $secret);
 
-        return self::post($hub.'/api/node/verify', ['site_id' => $siteId, 'timestamp' => $timestamp, 'proof' => $proof]);
+        return self::call((array) $hubs, '/api/node/verify', ['site_id' => $siteId, 'timestamp' => $timestamp, 'proof' => $proof]);
     }
 
     /** Print a Verify report. */

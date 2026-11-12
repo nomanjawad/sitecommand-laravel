@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- **Main address first, vercel.app as fallback**: connect, the approval check and verify (setup page and the `sitecommand:connect` / `sitecommand:verify` commands) go to `https://sitecomand.xyz` and fall back to `https://siteconnector.vercel.app` only when the main address cannot be reached (no connection, a 5xx, or an answer that is not JSON such as a parking page). A JSON answer from the main address, even an error, is final. An `.env` that still says the vercel.app address gets the same order; a self-hosted `SITECOMMAND_HUB` or `--hub` is used alone. Connect now writes `SITECOMMAND_HUB=https://sitecomand.xyz`.
+
 ## 0.3.0
 
 - **The setup page switches itself off once Verify passes**: it writes `SITECOMMAND_SETUP=false` into `.env` (or shows the line to paste when `.env` is not writable) and every setup route answers 404 from then on, checked on each request so cached routes and cached config follow it. Delete the line to open the page again.

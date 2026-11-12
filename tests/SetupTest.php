@@ -75,6 +75,59 @@ class SetupTest extends TestCase
         $this->assertSame(str_repeat('c', 64), Settings::secret());
     }
 
+    public function test_hubs_go_main_first_then_the_fallback(): void
+    {
+        $both = ['https://sitecomand.xyz', 'https://siteconnector.vercel.app'];
+        $this->assertSame($both, Settings::hubsFor(null));
+        $this->assertSame($both, Settings::hubsFor(''));
+        // An .env written with the old address still prefers the main one.
+        $this->assertSame($both, Settings::hubsFor('https://siteconnector.vercel.app/'));
+        $this->assertSame($both, Settings::hubsFor('https://sitecomand.xyz'));
+        // A self-hosted hub is used alone.
+        $this->assertSame(['https://hub.agency.test'], Settings::hubsFor('https://hub.agency.test/'));
+        $this->assertSame('https://sitecomand.xyz', Settings::hub());
+    }
+
+    public function test_connect_falls_back_when_the_main_address_is_down_and_writes_the_main_one(): void
+    {
+        Http::fake([
+            'sitecomand.xyz/*' => Http::response('<html>parked</html>', 200, ['Content-Type' => 'text/html']),
+            'siteconnector.vercel.app/api/connect/device/poll' => Http::response(['status' => 'approved', 'site_secret' => str_repeat('e', 64), 'site_id' => '11111111-2222-3333-4444-555555555555']),
+            'siteconnector.vercel.app/api/connect/device' => Http::response(['device_code' => str_repeat('d', 40), 'user_code' => 'WXYZ-1234', 'verification_uri_complete' => 'https://siteconnector.vercel.app/connect/device?code=WXYZ-1234', 'expires_in' => 600, 'interval' => 3]),
+        ]);
+        $this->actingAs($this->owner());
+        $this->post('/sitecommand/connect', ['url' => 'https://shop.example.com'])->assertRedirect('/sitecommand');
+        Http::assertSent(fn ($r) => $r->url() === 'https://sitecomand.xyz/api/connect/device');
+        Http::assertSent(fn ($r) => $r->url() === 'https://siteconnector.vercel.app/api/connect/device');
+        $this->get('/sitecommand')->assertOk()->assertSee('Connected. The secret is saved in .env.');
+        $env = (string) file_get_contents($this->envDir.'/.env');
+        $this->assertStringContainsString('SITECOMMAND_HUB=https://sitecomand.xyz', $env);
+    }
+
+    public function test_a_json_answer_from_the_main_address_is_final(): void
+    {
+        Http::fake([
+            'sitecomand.xyz/api/connect/device' => Http::response(['message' => 'Site limit reached.'], 403),
+            'siteconnector.vercel.app/*' => Http::response(['device_code' => 'x'], 200),
+        ]);
+        $this->actingAs($this->owner());
+        $this->post('/sitecommand/connect', ['url' => 'https://shop.example.com'])->assertRedirect('/sitecommand');
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'vercel.app'));
+        $this->get('/sitecommand')->assertSee('Site limit reached.');
+    }
+
+    public function test_verify_falls_back_on_a_server_error(): void
+    {
+        config(['sitecommand.site_id' => '11111111-2222-3333-4444-555555555555']);
+        Http::fake([
+            'sitecomand.xyz/*' => Http::response('Bad gateway', 502),
+            'siteconnector.vercel.app/api/node/verify' => Http::response(['ok' => false, 'steps' => [['id' => 'route', 'ok' => false, 'label' => 'Route and secret', 'detail' => 'No answer.']]], 409),
+        ]);
+        $this->actingAs($this->owner());
+        $this->post('/sitecommand/verify')->assertRedirect('/sitecommand');
+        $this->get('/sitecommand')->assertSee('Route and secret')->assertSee('Not verified yet');
+    }
+
     public function test_a_failed_verify_shows_the_checklist_and_keeps_the_page(): void
     {
         config(['sitecommand.site_id' => '11111111-2222-3333-4444-555555555555']);

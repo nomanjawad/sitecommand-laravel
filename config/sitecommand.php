@@ -8,8 +8,13 @@ return [
      */
     'secret' => env('SITECOMMAND_SECRET'),
 
-    /* The hub, and this app's id on it (written by sitecommand:connect; used by sitecommand:verify). */
-    'hub' => env('SITECOMMAND_HUB', 'https://siteconnector.vercel.app'),
+    /*
+     * The hub, and this app's id on it (written by sitecommand:connect; used by
+     * sitecommand:verify). Sitecommand's own addresses are tried main first
+     * (https://sitecomand.xyz), then https://siteconnector.vercel.app if the
+     * main one cannot be reached. Any other address (self-hosted) is used alone.
+     */
+    'hub' => env('SITECOMMAND_HUB', 'https://sitecomand.xyz'),
     'site_id' => env('SITECOMMAND_SITE_ID'),
 
     /* Where the connector's routes live. Keep it in step with the hub (default /api/sitecommand). */

@@ -15,7 +15,7 @@ class ConnectCommand extends Command
 {
     protected $signature = 'sitecommand:connect
         {--url= : The app\'s public https:// address (default: APP_URL)}
-        {--hub= : The Sitecommand hub (default: SITECOMMAND_HUB or https://siteconnector.vercel.app)}
+        {--hub= : The Sitecommand hub (default: https://sitecomand.xyz, then https://siteconnector.vercel.app if it cannot be reached)}
         {--name= : Name shown in Sitecommand (default: APP_NAME)}
         {--no-verify : Do not ask the hub to check the app at the end}';
 
@@ -23,7 +23,8 @@ class ConnectCommand extends Command
 
     public function handle(): int
     {
-        $hub = Hub::url($this->option('hub'));
+        $hubs = Hub::hubs($this->option('hub'));
+        $hub = $hubs[0];
         $url = self::origin((string) ($this->option('url') ?: config('app.url')));
         if ($url === null) {
             $this->error('Give the app\'s public address: php artisan sitecommand:connect --url=https://example.com (APP_URL is not an https:// address).');
@@ -33,7 +34,7 @@ class ConnectCommand extends Command
         $base = SitecommandServiceProvider::basePath();
 
         $this->line("Connecting <info>{$url}</info> to <info>{$hub}</info>");
-        [$status, $start] = Hub::post($hub.'/api/connect/device', [
+        [$status, $start, $hub] = Hub::call($hubs, '/api/connect/device', [
             'site_url' => $url,
             'framework' => 'laravel',
             'app_name' => (string) ($this->option('name') ?: config('app.name')),
@@ -56,7 +57,7 @@ class ConnectCommand extends Command
         $approved = null;
         while (time() < $deadline) {
             sleep($interval);
-            [, $poll] = Hub::post($hub.'/api/connect/device/poll', ['device_code' => $start['device_code']], 30);
+            [, $poll] = Hub::call(Hub::hubs($this->option('hub'), $hub), '/api/connect/device/poll', ['device_code' => $start['device_code']], 30);
             $s = $poll['status'] ?? 'unknown';
             if ($s === 'approved') {
                 $approved = $poll;
@@ -76,7 +77,7 @@ class ConnectCommand extends Command
             return self::FAILURE;
         }
 
-        $values = ['SITECOMMAND_SECRET' => $approved['site_secret'], 'SITECOMMAND_SITE_ID' => $approved['site_id'], 'SITECOMMAND_HUB' => $hub];
+        $values = ['SITECOMMAND_SECRET' => $approved['site_secret'], 'SITECOMMAND_SITE_ID' => $approved['site_id'], 'SITECOMMAND_HUB' => $hubs[0]];
         if (! Hub::writeEnv($values)) {
             $this->error('Could not write '.app()->environmentFilePath().'. Add these lines to the app\'s .env yourself:');
             foreach ($values as $k => $v) {
@@ -94,7 +95,7 @@ class ConnectCommand extends Command
         }
         $this->newLine();
         $this->line('Asking the hub to check the app…');
-        [, $report] = Hub::verify($hub, (string) $approved['site_id'], (string) $approved['site_secret']);
+        [, $report] = Hub::verify(Hub::hubs($this->option('hub'), $hub), (string) $approved['site_id'], (string) $approved['site_secret']);
         if (Hub::printReport($this, $report)) {
             $this->info('✓ Verified. The app shows as connected in Sitecommand.');
 
