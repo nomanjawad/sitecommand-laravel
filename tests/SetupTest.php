@@ -100,7 +100,10 @@ class SetupTest extends TestCase
         $this->startFake();
         $this->actingAs($this->owner());
         $this->post(self::SITE.'/sitecommand/connect');
-        $this->get(self::SITE.'/sitecommand/callback?sc=approved')->assertRedirect('/sitecommand');
+        // Back from Sitecommand: the same "Finishing the connection" page as the WordPress plugin, which goes on to finish.
+        $this->get(self::SITE.'/sitecommand/callback?sc=approved')->assertOk()->assertSee('Finishing the connection')->assertSee('/sitecommand/finish', false);
+        Http::assertNotSent(fn ($r) => str_ends_with($r->url(), '/poll'));
+        $this->get(self::SITE.'/sitecommand/finish')->assertRedirect('/sitecommand');
 
         $env = (string) file_get_contents($this->envDir.'/.env');
         $this->assertStringStartsWith("APP_NAME=Shop\n", $env);
@@ -118,8 +121,9 @@ class SetupTest extends TestCase
             ->assertSee('Site slow')->assertSee('guzzlehttp/guzzle')->assertSee('Open in Sitecommand')->assertDontSee('Connect this site');
         // The popup shows once.
         $this->get(self::SITE.'/sitecommand')->assertOk()->assertDontSee('Back to the website');
-        // A second visit to the callback has nothing left to collect.
+        // A second visit has nothing left to collect.
         $this->get(self::SITE.'/sitecommand/callback?sc=approved')->assertRedirect('/sitecommand');
+        $this->get(self::SITE.'/sitecommand/finish')->assertRedirect('/sitecommand');
     }
 
     public function test_cancelled_in_sitecommand(): void
@@ -137,7 +141,8 @@ class SetupTest extends TestCase
         $this->startFake(['*/api/node/verify' => Http::response(['ok' => false, 'steps' => [['id' => 'route', 'ok' => false, 'label' => 'Route and secret', 'detail' => 'No answer.', 'fix' => 'Deploy first.']]], 409)]);
         $this->actingAs($this->owner());
         $this->post(self::SITE.'/sitecommand/connect');
-        $this->get(self::SITE.'/sitecommand/callback?sc=approved');
+        $this->get(self::SITE.'/sitecommand/callback?sc=approved')->assertOk();
+        $this->get(self::SITE.'/sitecommand/finish');
         $this->assertStringContainsString('SITECOMMAND_SECRET=', (string) file_get_contents($this->envDir.'/.env'));
         $this->get(self::SITE.'/sitecommand')->assertSee('could not verify the site yet')->assertSee('Deploy first.')->assertDontSee('Back to the website');
     }
@@ -219,6 +224,7 @@ class SetupTest extends TestCase
         $this->actingAs($this->owner())->get('/sitecommand')->assertNotFound();
         $this->post('/sitecommand/connect')->assertNotFound();
         $this->get('/sitecommand/callback')->assertNotFound();
+        $this->get('/sitecommand/finish')->assertNotFound();
         // The connector itself keeps answering (unsigned = its own plain 404).
         $this->get('/api/sitecommand/info')->assertNotFound()->assertSee('Not Found');
     }

@@ -116,18 +116,35 @@ class SetupController
         return redirect()->away($link.(str_contains($link, '?') ? '&' : '?').'return='.rawurlencode($back));
     }
 
-    /** Back from Sitecommand: collect the secret, save it, verify, and show the result as a popup. */
-    public function callback(Request $request): RedirectResponse
+    /**
+     * Back from Sitecommand. Shows the "Finishing the connection" page (the
+     * same bar and steps as the WordPress plugin), which goes straight on to
+     * finish(); the browser keeps showing it while finish() collects the
+     * secret, saves it and verifies, so the animation runs during the wait.
+     */
+    public function callback(Request $request): Response
     {
         $this->authorize($request);
-        $device = $request->session()->get(self::SESSION);
-        if (! is_array($device)) {
+        if (! is_array($request->session()->get(self::SESSION))) {
             return $this->back($request, 'bad', 'This connection was already finished or has expired. If the site is not connected yet, press Connect with Sitecommand again.');
         }
         if ($request->query('sc') === 'denied') {
             $request->session()->forget(self::SESSION);
 
             return $this->back($request, 'bad', 'The connection was cancelled in Sitecommand.');
+        }
+
+        return response()->view('sitecommand::connecting', ['next' => $this->base().'/finish'])
+            ->header('Cache-Control', 'no-store, private')->header('X-Robots-Tag', 'noindex');
+    }
+
+    /** Collect the secret, save it, verify, and show the result as a popup. */
+    public function finish(Request $request): RedirectResponse
+    {
+        $this->authorize($request);
+        $device = $request->session()->get(self::SESSION);
+        if (! is_array($device)) {
+            return $this->back($request, 'bad', 'This connection was already finished or has expired. If the site is not connected yet, press Connect with Sitecommand again.');
         }
         // Approval was just given, so the first poll normally collects; allow a short moment for it.
         for ($i = 0; $i < 3; $i++) {

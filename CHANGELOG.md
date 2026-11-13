@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Back from Sitecommand the site shows the same "Finishing the connection…" page as the WordPress plugin (bar and steps) while it collects its secret, saves it and verifies (`/sitecommand/callback` → `/sitecommand/finish`), then the Verified popup. The hub's approval page for apps now matches the WordPress consent page (site status, account, plan, tags, progress animation).
+
 ## 0.4.0
 
 - **Connect with Sitecommand works like the WordPress plugin**: the button sends you to Sitecommand to approve (no code to copy), you come straight back to `/sitecommand/callback`, and the site saves its secret, runs Verify by itself and shows a Verified popup (Back to the website / See the status). Needs the hub's return-to-site approval (hub 2026-11-12).
